@@ -301,6 +301,81 @@ def load_and_process_data():
             st.error(f"Error processing file {file}: {e}")
             continue
     
+    # Add missing states with proper regions (they should appear even with no data)
+    all_us_states = [
+        'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 
+        'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 
+        'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 
+        'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 
+        'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio', 
+        'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota', 
+        'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington', 'West Virginia', 
+        'Wisconsin', 'Wyoming'
+    ]
+    
+    # Ensure all 50 states exist with proper regions
+    region_map = {
+        # Southeast
+        'Alabama': 'Southeast', 'Florida': 'Southeast', 'Georgia': 'Southeast',
+        'Louisiana': 'Southeast', 'Mississippi': 'Southeast', 'North Carolina': 'Southeast',
+        'South Carolina': 'Southeast', 'Arkansas': 'Southeast',
+        
+        # Mid-Atlantic  
+        'Maryland': 'Mid-Atlantic', 'Virginia': 'Mid-Atlantic', 'Delaware': 'Mid-Atlantic',
+        'Pennsylvania': 'Mid-Atlantic', 'New Jersey': 'Mid-Atlantic',
+        
+        # Northeast
+        'New York': 'Northeast', 'Connecticut': 'Northeast', 'Maine': 'Northeast',
+        'Massachusetts': 'Northeast', 'New Hampshire': 'Northeast', 'Vermont': 'Northeast',
+        'Rhode Island': 'Northeast',
+        
+        # Midwest
+        'Illinois': 'Midwest', 'Michigan': 'Midwest', 'Minnesota': 'Midwest',
+        'Missouri': 'Midwest', 'Iowa': 'Midwest', 'Nebraska': 'Midwest',
+        'Indiana': 'Midwest', 'Ohio': 'Midwest', 'Wisconsin': 'Midwest',
+        'Kansas': 'Midwest', 'North Dakota': 'Midwest', 'South Dakota': 'Midwest',
+        
+        # Mountain West
+        'Colorado': 'Mountain West', 'Idaho': 'Mountain West', 'Montana': 'Mountain West',
+        'Nevada': 'Mountain West', 'Utah': 'Mountain West', 'Wyoming': 'Mountain West',
+        
+        # West Coast
+        'California': 'West Coast', 'Oregon': 'West Coast', 'Washington': 'West Coast',
+        
+        # Southwest
+        'Texas': 'Southwest', 'Arizona': 'Southwest', 'New Mexico': 'Southwest',
+        'Oklahoma': 'Southwest',
+        
+        # Appalachia
+        'Kentucky': 'Appalachia', 'West Virginia': 'Appalachia', 'Tennessee': 'Appalachia',
+        
+        # Alaska & Hawaii
+        'Alaska': 'Alaska & Hawaii', 'Hawaii': 'Alaska & Hawaii'
+    }
+    
+    for state in all_us_states:
+        if state not in state_data:
+            state_data[state] = {
+                'state': state,
+                'key_statutes': '',
+                'local_authority': '',
+                'notable_provisions': '',
+                'vulnerable_protections': '',
+                'civil_rights': '',
+                'disability_needs': '',
+                'language_access': '',
+                'equity_initiatives': '',
+                'emergency_declaration': '',
+                'mitigation_planning': '',
+                'mutual_aid': '',
+                'data_availability': 0.0,
+                'region': region_map.get(state, 'Unknown')
+            }
+        else:
+            # Ensure existing states have proper regions if unknown
+            if state_data[state]['region'] == 'Unknown':
+                state_data[state]['region'] = region_map.get(state, 'Unknown')
+    
     # Convert to DataFrame
     df_final = pd.DataFrame(list(state_data.values()))
     
@@ -316,7 +391,8 @@ def load_and_process_data():
         'Oklahoma': 'OK', 'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
         'South Dakota': 'SD', 'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT',
         'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY',
-        'District of Columbia': 'DC', 'Puerto Rico': 'PR'
+        'District of Columbia': 'DC', 'Puerto Rico': 'PR', 'Guam': 'GU', 'U.S. Virgin Islands': 'VI',
+        'American Samoa': 'AS', 'Northern Mariana Islands': 'MP'
     }
     
     df_final['state_code'] = df_final['state'].map(state_abbrev)
@@ -325,7 +401,9 @@ def load_and_process_data():
 
 def get_data_availability_level(score):
     """Convert data availability score to categorical level"""
-    if score >= 0.7:
+    if score == 0.0:
+        return "No Data"
+    elif score >= 0.7:
         return "Rich Data"
     elif score >= 0.4:
         return "Moderate Data"
@@ -442,7 +520,6 @@ with col2:
     if st.session_state.selected_state:
         state_info = df[df['state'] == st.session_state.selected_state].iloc[0]
         
-        st.markdown(f'<div class="state-detail">', unsafe_allow_html=True)
         st.subheader(f"📍 {state_info['state']}")
         
         # Data availability metric
@@ -467,12 +544,27 @@ with col2:
         if state_info['equity_initiatives']:
             st.subheader("⚖️ Equity Initiatives")
             st.write(state_info['equity_initiatives'])
-            
-        st.markdown('</div>', unsafe_allow_html=True)
     else:
-        st.markdown('<div class="state-detail">', unsafe_allow_html=True)
         st.info("👆 Click a state on the map to view detailed disaster law information")
-        st.markdown('</div>', unsafe_allow_html=True)
+
+# Territory data section (since territories don't appear on US map)
+territories_with_data = df[df['state'].isin(['District of Columbia', 'Puerto Rico', 'Guam'])]
+if not territories_with_data.empty:
+    st.markdown('<div class="section-header">🏛️ US Territories & Districts</div>', unsafe_allow_html=True)
+    st.markdown("*These jurisdictions have disaster law data but don't appear on the US state map above.*")
+    
+    territory_cols = st.columns(len(territories_with_data))
+    for i, (_, territory) in enumerate(territories_with_data.iterrows()):
+        with territory_cols[i]:
+            st.subheader(f"📍 {territory['state']}")
+            coverage = territory['data_availability']
+            level = get_data_availability_level(coverage)
+            st.metric("Data Coverage", f"{coverage:.1%}", delta=f"{level}")
+            
+            if territory['vulnerable_protections']:
+                with st.expander("View Details"):
+                    st.write("**Vulnerable Protections:**")
+                    st.write(territory['vulnerable_protections'][:200] + "..." if len(territory['vulnerable_protections']) > 200 else territory['vulnerable_protections'])
 
 # Filter controls
 st.markdown('<div class="section-header">🔍 Filter States</div>', unsafe_allow_html=True)
