@@ -102,12 +102,49 @@ def load_and_process_data():
         'region': 'Unknown'
     })
     
-    # State name mapping for consistency
-    state_mapping = {
-        'Iowa, etc.': 'Iowa',
-        'Others': 'Wisconsin',  # Assuming from context
-        'Guam, USVI, American Samoa, Northern Mariana I...': 'Guam'
+    # Valid US states and territories for validation
+    valid_states = {
+        'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 
+        'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 
+        'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 
+        'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 
+        'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio', 
+        'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota', 
+        'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington', 'West Virginia', 
+        'Wisconsin', 'Wyoming', 'District of Columbia', 'Puerto Rico', 'Guam', 'U.S. Virgin Islands', 
+        'American Samoa', 'Northern Mariana Islands'
     }
+    
+    def parse_state_names(state_string):
+        """Parse and validate state names from various formats"""
+        if not state_string or str(state_string).strip() == 'nan':
+            return []
+            
+        state_string = str(state_string).strip()
+        
+        # Filter out obvious non-state entries
+        if any(indicator in state_string.lower() for indicator in [
+            'http', 'www', '.pdf', '.gov', '.com',  # URLs
+            'often ', 'varies', 'not highlighted', 'coordination',  # Descriptive text
+            'highest in', 'large at-risk', 'patchwork', 'major losses',  # Analysis text
+            'many states', 'some states'  # Aggregate descriptions
+        ]):
+            return []
+            
+        # Handle multi-state entries
+        if ',' in state_string:
+            states = []
+            for part in state_string.split(','):
+                part = part.strip()
+                if part in valid_states:
+                    states.append(part)
+                elif part == 'etc.' or part == 'Others':
+                    continue  # Skip these non-specific entries
+            return states
+        elif state_string in valid_states:
+            return [state_string]
+        else:
+            return []
     
     # Process each Excel file
     for file in excel_files:
@@ -125,19 +162,13 @@ def load_and_process_data():
                 continue
                 
             for _, row in df.iterrows():
-                state_name = str(row[state_col]).strip()
+                state_names = parse_state_names(row[state_col])
                 
-                # Apply state name mapping
-                if state_name in state_mapping:
-                    state_name = state_mapping[state_name]
-                
-                # Skip non-state entries
-                if not state_name or state_name in ['nan', 'Approach', 'Aspect', 'Impact Area', 'Protection Area', 'Region']:
-                    continue
-                
-                # Update state data with available information
-                state_entry = state_data[state_name]
-                state_entry['state'] = state_name
+                # Process each valid state found
+                for state_name in state_names:
+                    # Update state data with available information
+                    state_entry = state_data[state_name]
+                    state_entry['state'] = state_name
                 
                 # Map columns to standardized fields
                 for col in df.columns:
@@ -189,7 +220,7 @@ def load_and_process_data():
                 filled_fields = sum(1 for field in data_fields if state_entry[field] and state_entry[field].strip() and state_entry[field] != 'nan')
                 state_entry['data_availability'] = filled_fields / len(data_fields)
                 
-                # Determine region
+                # Determine region based on filename and state name
                 if file.startswith('CA-WA-OR'):
                     state_entry['region'] = 'West Coast'
                 elif 'Southwest' in file or file.startswith('SW-'):
@@ -204,6 +235,67 @@ def load_and_process_data():
                     state_entry['region'] = 'Mountain West'
                 elif 'AK-HI' in file:
                     state_entry['region'] = 'Alaska & Hawaii'
+                elif 'South' in file or 'Mid-Atlantic' in file:
+                    # Map Southeast states from South/Mid-Atlantic files
+                    southeast_states = {
+                        'Alabama', 'Florida', 'Georgia', 'Louisiana', 'Mississippi', 
+                        'North Carolina', 'South Carolina', 'Tennessee', 'Arkansas'
+                    }
+                    mid_atlantic_states = {'Maryland', 'Virginia', 'Delaware'}
+                    
+                    if state_name in southeast_states:
+                        state_entry['region'] = 'Southeast'
+                    elif state_name in mid_atlantic_states:
+                        state_entry['region'] = 'Mid-Atlantic'
+                
+                # Fallback region assignment based on state name if still unknown
+                if state_entry['region'] == 'Unknown':
+                    region_map = {
+                        # Southeast
+                        'Alabama': 'Southeast', 'Florida': 'Southeast', 'Georgia': 'Southeast',
+                        'Louisiana': 'Southeast', 'Mississippi': 'Southeast', 'North Carolina': 'Southeast',
+                        'South Carolina': 'Southeast', 'Arkansas': 'Southeast',
+                        
+                        # Mid-Atlantic  
+                        'Maryland': 'Mid-Atlantic', 'Virginia': 'Mid-Atlantic', 'Delaware': 'Mid-Atlantic',
+                        'Pennsylvania': 'Mid-Atlantic', 'New Jersey': 'Mid-Atlantic',
+                        
+                        # Northeast
+                        'New York': 'Northeast', 'Connecticut': 'Northeast', 'Maine': 'Northeast',
+                        'Massachusetts': 'Northeast', 'New Hampshire': 'Northeast', 'Vermont': 'Northeast',
+                        'Rhode Island': 'Northeast',
+                        
+                        # Midwest
+                        'Illinois': 'Midwest', 'Michigan': 'Midwest', 'Minnesota': 'Midwest',
+                        'Missouri': 'Midwest', 'Iowa': 'Midwest', 'Nebraska': 'Midwest',
+                        'Indiana': 'Midwest', 'Ohio': 'Midwest', 'Wisconsin': 'Midwest',
+                        'Kansas': 'Midwest', 'North Dakota': 'Midwest', 'South Dakota': 'Midwest',
+                        
+                        # Mountain West
+                        'Colorado': 'Mountain West', 'Idaho': 'Mountain West', 'Montana': 'Mountain West',
+                        'Nevada': 'Mountain West', 'Utah': 'Mountain West', 'Wyoming': 'Mountain West',
+                        
+                        # West Coast
+                        'California': 'West Coast', 'Oregon': 'West Coast', 'Washington': 'West Coast',
+                        
+                        # Southwest
+                        'Texas': 'Southwest', 'Arizona': 'Southwest', 'New Mexico': 'Southwest',
+                        'Oklahoma': 'Southwest',
+                        
+                        # Appalachia
+                        'Kentucky': 'Appalachia', 'West Virginia': 'Appalachia', 'Tennessee': 'Appalachia',
+                        
+                        # Alaska & Hawaii
+                        'Alaska': 'Alaska & Hawaii', 'Hawaii': 'Alaska & Hawaii',
+                        
+                        # Territories
+                        'District of Columbia': 'Mid-Atlantic', 'Puerto Rico': 'Territories',
+                        'Guam': 'Territories', 'U.S. Virgin Islands': 'Territories',
+                        'American Samoa': 'Territories', 'Northern Mariana Islands': 'Territories'
+                    }
+                    
+                    if state_name in region_map:
+                        state_entry['region'] = region_map[state_name]
                 
         except Exception as e:
             st.error(f"Error processing file {file}: {e}")
