@@ -523,6 +523,10 @@ with col1:
 
     # Create choropleth map with grey for no-data and blue gradient for data states
     if not filtered_df.empty:
+        custom_data_cols = [
+            'state', 'region', 'data_availability', 'Equity Initiatives', 'Civil Rights', 
+            'Vulnerable Protections', 'Language Access', 'Disability Provisions', 'Emergency Powers'
+        ]
         fig = px.choropleth(
             filtered_df_display,
             locations='state_code',
@@ -536,25 +540,29 @@ with col1:
                 [1, '#1E3A8A']       # Dark blue (high data)
             ],
             range_color=[0, 1],
-            hover_name='state',
-            hover_data={
-                'state_code': False,
-                'color_value': False,
-                'data_availability': ':.1%',
-                'region': True,
-                'Equity Initiatives': True,
-                'Civil Rights': True,
-                'Vulnerable Protections': True,
-                'Language Access': True,
-                'Disability Provisions': True,
-                'Emergency Powers': True
-            },
+            hover_name='state', # Keep for selection events
+            custom_data=custom_data_cols,
             labels={
                 'region': 'Region',
                 'data_availability': 'Data Coverage',
                 'color_value': 'Data Level'
             }
         )
+        
+        # Custom hover template for better formatting
+        hovertemplate = (
+            "<b>%{customdata[0]}</b><br><br>" +
+            "Region = %{customdata[1]}<br>" +
+            "Data Coverage = %{customdata[2]:.1%}<br>" +
+            "Equity Initiatives = %{customdata[3]}<br>" +
+            "Civil Rights = %{customdata[4]}<br>" +
+            "Vulnerable Protections = %{customdata[5]}<br>" +
+            "Language Access = %{customdata[6]}<br>" +
+            "Disability Provisions = %{customdata[7]}<br>" +
+            "Emergency Powers = %{customdata[8]}<br>" +
+            "<extra></extra>"
+        )
+        fig.update_traces(hovertemplate=hovertemplate)
         
         # Add state symbols (circles) on the map
         fig.add_scattergeo(
