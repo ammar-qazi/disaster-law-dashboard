@@ -301,8 +301,8 @@ def load_and_process_data():
             st.error(f"Error processing file {file}: {e}")
             continue
     
-    # Add missing states with proper regions (they should appear even with no data)
-    all_us_states = [
+    # Add missing states and territories with proper regions (they should appear even with no data)
+    all_us_states_and_territories = [
         'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 
         'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 
         'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 
@@ -310,7 +310,8 @@ def load_and_process_data():
         'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio', 
         'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota', 
         'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington', 'West Virginia', 
-        'Wisconsin', 'Wyoming'
+        'Wisconsin', 'Wyoming', 'District of Columbia', 'Puerto Rico', 'Guam', 'U.S. Virgin Islands',
+        'American Samoa', 'Northern Mariana Islands'
     ]
     
     # Ensure all 50 states exist with proper regions
@@ -350,10 +351,15 @@ def load_and_process_data():
         'Kentucky': 'Appalachia', 'West Virginia': 'Appalachia', 'Tennessee': 'Appalachia',
         
         # Alaska & Hawaii
-        'Alaska': 'Alaska & Hawaii', 'Hawaii': 'Alaska & Hawaii'
+        'Alaska': 'Alaska & Hawaii', 'Hawaii': 'Alaska & Hawaii',
+        
+        # Territories
+        'District of Columbia': 'Mid-Atlantic', 'Puerto Rico': 'Territories',
+        'Guam': 'Territories', 'U.S. Virgin Islands': 'Territories',
+        'American Samoa': 'Territories', 'Northern Mariana Islands': 'Territories'
     }
     
-    for state in all_us_states:
+    for state in all_us_states_and_territories:
         if state not in state_data:
             state_data[state] = {
                 'state': state,
@@ -399,16 +405,6 @@ def load_and_process_data():
     
     return df_final
 
-def get_data_availability_level(score):
-    """Convert data availability score to categorical level"""
-    if score == 0.0:
-        return "No Data"
-    elif score >= 0.7:
-        return "Rich Data"
-    elif score >= 0.4:
-        return "Moderate Data"
-    else:
-        return "Limited Data"
 
 def has_specific_data_type(state_data, data_type):
     """Check if state has specific type of data available"""
@@ -443,129 +439,6 @@ df = load_and_process_data()
 st.markdown('<div class="main-header">🗺️ Disaster Law Data Discovery Dashboard</div>', unsafe_allow_html=True)
 st.markdown("*Explore available disaster law data across states - discover what information exists rather than making assumptions about protection levels*")
 
-# Apply filters
-filtered_df = df.copy()
-
-if st.session_state.filter_data_type != "All":
-    if st.session_state.filter_data_type == "Vulnerable Protections":
-        filtered_df = filtered_df[filtered_df.apply(lambda x: has_specific_data_type(x, 'vulnerable_protections'), axis=1)]
-    elif st.session_state.filter_data_type == "Equity Initiatives":
-        filtered_df = filtered_df[filtered_df.apply(lambda x: has_specific_data_type(x, 'equity_initiatives'), axis=1)]
-    elif st.session_state.filter_data_type == "Civil Rights":
-        filtered_df = filtered_df[filtered_df.apply(lambda x: has_specific_data_type(x, 'civil_rights'), axis=1)]
-    elif st.session_state.filter_data_type == "Language Access":
-        filtered_df = filtered_df[filtered_df.apply(lambda x: has_specific_data_type(x, 'language_access'), axis=1)]
-    elif st.session_state.filter_data_type == "Disability Provisions":
-        filtered_df = filtered_df[filtered_df.apply(lambda x: has_specific_data_type(x, 'disability_provisions'), axis=1)]
-    elif st.session_state.filter_data_type == "Emergency Powers":
-        filtered_df = filtered_df[filtered_df.apply(lambda x: has_specific_data_type(x, 'emergency_powers'), axis=1)]
-
-if st.session_state.filter_region != "All":
-    filtered_df = filtered_df[filtered_df['region'] == st.session_state.filter_region]
-
-# Main layout
-col1, col2 = st.columns([2, 1])
-
-with col1:
-    st.markdown('<div class="section-header">🗺️ State Disaster Law Data Availability</div>', unsafe_allow_html=True)
-    
-    # Create choropleth map showing data availability
-    if not filtered_df.empty:
-        fig = px.choropleth(
-            filtered_df,
-            locations='state_code',
-            color='data_availability',
-            locationmode='USA-states',
-            scope='usa',
-            color_continuous_scale=['#64748b', '#3b82f6', '#06b6d4'],  # Gray to Blue gradient
-            range_color=[0, 1],
-            hover_name='state',
-            hover_data={
-                'state_code': False,
-                'data_availability': ':.1%',
-                'region': True
-            },
-            labels={
-                'data_availability': 'Data Coverage',
-                'region': 'Region'
-            }
-        )
-        
-        fig.update_layout(
-            geo=dict(bgcolor='rgba(0,0,0,0)', lakecolor='#1a1a1a'),
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white'),
-            coloraxis_colorbar=dict(
-                title="Data Coverage",
-                tickformat='.0%',
-                bgcolor='rgba(0,0,0,0.5)'
-            ),
-            height=500
-        )
-        
-        # Handle map clicks
-        event = st.plotly_chart(fig, key="disaster_map", on_select="rerun", use_container_width=True)
-        
-        if event and hasattr(event, 'selection') and event.selection.points:
-            clicked_state_code = event.selection.points[0]['location']
-            clicked_state = df[df['state_code'] == clicked_state_code]['state'].iloc[0]
-            st.session_state.selected_state = clicked_state
-    else:
-        st.info("No states match the current filter criteria.")
-
-with col2:
-    st.markdown('<div class="section-header">📋 State Details</div>', unsafe_allow_html=True)
-    
-    if st.session_state.selected_state:
-        state_info = df[df['state'] == st.session_state.selected_state].iloc[0]
-        
-        st.subheader(f"📍 {state_info['state']}")
-        
-        # Data availability metric
-        data_coverage = state_info['data_availability']
-        coverage_level = get_data_availability_level(data_coverage)
-        
-        col_coverage, col_region = st.columns(2)
-        with col_coverage:
-            st.metric("Data Coverage", f"{data_coverage:.1%}", delta=f"{coverage_level}")
-        with col_region:
-            st.metric("Region", state_info['region'])
-        
-        # Detailed information
-        if state_info['vulnerable_protections']:
-            st.subheader("🛡️ Vulnerable Population Protections")
-            st.write(state_info['vulnerable_protections'][:300] + "..." if len(state_info['vulnerable_protections']) > 300 else state_info['vulnerable_protections'])
-        
-        if state_info['key_statutes']:
-            st.subheader("📜 Key Statutes")
-            st.write(state_info['key_statutes'][:200] + "..." if len(state_info['key_statutes']) > 200 else state_info['key_statutes'])
-        
-        if state_info['equity_initiatives']:
-            st.subheader("⚖️ Equity Initiatives")
-            st.write(state_info['equity_initiatives'])
-    else:
-        st.info("👆 Click a state on the map to view detailed disaster law information")
-
-# Territory data section (since territories don't appear on US map)
-territories_with_data = df[df['state'].isin(['District of Columbia', 'Puerto Rico', 'Guam'])]
-if not territories_with_data.empty:
-    st.markdown('<div class="section-header">🏛️ US Territories & Districts</div>', unsafe_allow_html=True)
-    st.markdown("*These jurisdictions have disaster law data but don't appear on the US state map above.*")
-    
-    territory_cols = st.columns(len(territories_with_data))
-    for i, (_, territory) in enumerate(territories_with_data.iterrows()):
-        with territory_cols[i]:
-            st.subheader(f"📍 {territory['state']}")
-            coverage = territory['data_availability']
-            level = get_data_availability_level(coverage)
-            st.metric("Data Coverage", f"{coverage:.1%}", delta=f"{level}")
-            
-            if territory['vulnerable_protections']:
-                with st.expander("View Details"):
-                    st.write("**Vulnerable Protections:**")
-                    st.write(territory['vulnerable_protections'][:200] + "..." if len(territory['vulnerable_protections']) > 200 else territory['vulnerable_protections'])
-
 # Filter controls
 st.markdown('<div class="section-header">🔍 Filter States</div>', unsafe_allow_html=True)
 
@@ -597,56 +470,188 @@ with col2:
 
 with col3:
     # Count only actual US states (exclude territories)
-    us_states_only = filtered_df[~filtered_df['state'].isin(['District of Columbia', 'Puerto Rico', 'Guam', 'U.S. Virgin Islands', 'American Samoa', 'Northern Mariana Islands'])]
+    us_states_only = df[~df['state'].isin(['District of Columbia', 'Puerto Rico', 'Guam', 'U.S. Virgin Islands', 'American Samoa', 'Northern Mariana Islands'])]
     total_states = len(us_states_only)
-    total_jurisdictions = len(filtered_df)
+    total_jurisdictions = len(df)
     st.metric("US States", total_states)
     if total_jurisdictions > total_states:
         st.caption(f"({total_jurisdictions} total jurisdictions)")
 
-with col4:
-    avg_coverage = filtered_df['data_availability'].mean() if not filtered_df.empty else 0
-    st.metric("Avg Data Coverage", f"{avg_coverage:.1%}")
+# Apply filters
+filtered_df = df.copy()
 
-# Summary statistics  
-if not filtered_df.empty:
-    st.markdown('<div class="section-header">📊 Data Discovery Summary</div>', unsafe_allow_html=True)
+if st.session_state.filter_data_type != "All":
+    if st.session_state.filter_data_type == "Vulnerable Protections":
+        filtered_df = filtered_df[filtered_df.apply(lambda x: has_specific_data_type(x, 'vulnerable_protections'), axis=1)]
+    elif st.session_state.filter_data_type == "Equity Initiatives":
+        filtered_df = filtered_df[filtered_df.apply(lambda x: has_specific_data_type(x, 'equity_initiatives'), axis=1)]
+    elif st.session_state.filter_data_type == "Civil Rights":
+        filtered_df = filtered_df[filtered_df.apply(lambda x: has_specific_data_type(x, 'civil_rights'), axis=1)]
+    elif st.session_state.filter_data_type == "Language Access":
+        filtered_df = filtered_df[filtered_df.apply(lambda x: has_specific_data_type(x, 'language_access'), axis=1)]
+    elif st.session_state.filter_data_type == "Disability Provisions":
+        filtered_df = filtered_df[filtered_df.apply(lambda x: has_specific_data_type(x, 'disability_provisions'), axis=1)]
+    elif st.session_state.filter_data_type == "Emergency Powers":
+        filtered_df = filtered_df[filtered_df.apply(lambda x: has_specific_data_type(x, 'emergency_powers'), axis=1)]
+
+if st.session_state.filter_region != "All":
+    filtered_df = filtered_df[filtered_df['region'] == st.session_state.filter_region]
+
+with col4:
+    st.metric("Total Jurisdictions", len(filtered_df) if not filtered_df.empty else 0)
+
+# Main layout
+col1, col2 = st.columns([2, 1])
+
+with col1:
+    st.markdown('<div class="section-header">🗺️ State Disaster Law Data Availability</div>', unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns(3)
+    # Add data category flags for hover display and simple coloring
+    filtered_df_display = filtered_df.copy()
+    filtered_df_display['Equity Initiatives'] = filtered_df_display.apply(lambda x: '✓' if has_specific_data_type(x, 'equity_initiatives') else '✗', axis=1)
+    filtered_df_display['Civil Rights'] = filtered_df_display.apply(lambda x: '✓' if has_specific_data_type(x, 'civil_rights') else '✗', axis=1)
+    filtered_df_display['Vulnerable Protections'] = filtered_df_display.apply(lambda x: '✓' if has_specific_data_type(x, 'vulnerable_protections') else '✗', axis=1)
+    filtered_df_display['Language Access'] = filtered_df_display.apply(lambda x: '✓' if has_specific_data_type(x, 'language_access') else '✗', axis=1)
+    filtered_df_display['Disability Provisions'] = filtered_df_display.apply(lambda x: '✓' if has_specific_data_type(x, 'disability_provisions') else '✗', axis=1)
+    filtered_df_display['Emergency Powers'] = filtered_df_display.apply(lambda x: '✓' if has_specific_data_type(x, 'emergency_powers') else '✗', axis=1)
     
-    # Count states with different types of data
-    with col1:
-        st.subheader("🛡️ Vulnerable Protections")
-        vuln_count = filtered_df[filtered_df.apply(lambda x: has_specific_data_type(x, 'vulnerable_protections'), axis=1)].shape[0]
-        st.metric("States with Data", vuln_count)
+    # Create continuous color scale based on data availability (0-1)
+    # Use grey for no data (0) and blue gradient for data (>0)
+    filtered_df_display['color_value'] = filtered_df_display['data_availability'].apply(
+        lambda x: 0 if x == 0 else max(0.3, x)  # Ensure minimum blue visibility for states with any data
+    )
+
+    # Create choropleth map with grey for no-data and blue gradient for data states
+    if not filtered_df.empty:
+        fig = px.choropleth(
+            filtered_df_display,
+            locations='state_code',
+            color='color_value',
+            locationmode='USA-states',
+            scope='usa',
+            color_continuous_scale=[
+                # [0, '#808080'],      # Grey for no data
+                [0, '#87CEEB'], # Light blue (start of data range)
+                [0.5, '#4682B4'],    # Steel blue (medium data)
+                [1, '#1E3A8A']       # Dark blue (high data)
+            ],
+            range_color=[0, 1],
+            hover_name='state',
+            hover_data={
+                'state_code': False,
+                'color_value': False,
+                'data_availability': ':.1%',
+                'region': True,
+                'Equity Initiatives': True,
+                'Civil Rights': True,
+                'Vulnerable Protections': True,
+                'Language Access': True,
+                'Disability Provisions': True,
+                'Emergency Powers': True
+            },
+            labels={
+                'region': 'Region',
+                'data_availability': 'Data Coverage',
+                'color_value': 'Data Level'
+            }
+        )
         
-    with col2:
-        st.subheader("⚖️ Equity Initiatives") 
-        equity_count = filtered_df[filtered_df.apply(lambda x: has_specific_data_type(x, 'equity_initiatives'), axis=1)].shape[0]
-        st.metric("States with Data", equity_count)
+        # Add state symbols (circles) on the map
+        fig.add_scattergeo(
+            locations=filtered_df_display['state_code'],
+            mode='markers+text',
+            marker=dict(
+                size=8,
+                color='white',
+                symbol='circle',
+                line=dict(color='black', width=1)
+            ),
+            text=filtered_df_display['state_code'],
+            textposition='middle center',
+            textfont=dict(size=8, color='black', family='Arial Bold'),
+            showlegend=False,
+            hoverinfo='skip'
+        )
         
-    with col3:
-        st.subheader("🏛️ Civil Rights")
-        civil_count = filtered_df[filtered_df.apply(lambda x: has_specific_data_type(x, 'civil_rights'), axis=1)].shape[0]
-        st.metric("States with Data", civil_count)
-    
-    # Additional data categories
-    col4, col5, col6 = st.columns(3)
-    
-    with col4:
-        st.subheader("🌐 Language Access")
-        lang_count = filtered_df[filtered_df.apply(lambda x: has_specific_data_type(x, 'language_access'), axis=1)].shape[0]
-        st.metric("States with Data", lang_count)
-    
-    with col5:
-        st.subheader("♿ Disability Provisions")
-        disability_count = filtered_df[filtered_df.apply(lambda x: has_specific_data_type(x, 'disability_provisions'), axis=1)].shape[0]
-        st.metric("States with Data", disability_count)
+        fig.update_layout(
+            geo=dict(bgcolor='rgba(0,0,0,0)', lakecolor='#1a1a1a'),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='white'),
+            height=500
+        )
         
-    with col6:
-        st.subheader("🚨 Emergency Powers")
-        emergency_count = filtered_df[filtered_df.apply(lambda x: has_specific_data_type(x, 'emergency_powers'), axis=1)].shape[0]
-        st.metric("States with Data", emergency_count)
+        # Custom colorbar
+        fig.update_coloraxes(
+            colorbar=dict(
+                title=dict(text="Data Availability", side="right"),
+                tickmode="array",
+                tickvals=[0, 0.25, 0.5, 0.75, 1.0],
+                ticktext=["No Data", "25%", "50%", "75%", "100%"],
+                thickness=15,
+                len=0.4,
+                bgcolor='rgba(0,0,0,0.8)',
+                bordercolor='white',
+                borderwidth=1,
+                x=1.02,
+                tickfont=dict(color='white', size=10)
+            )
+        )
+        
+        # Handle map clicks
+        event = st.plotly_chart(fig, key="disaster_map", on_select="rerun", use_container_width=True)
+        
+        if event and hasattr(event, 'selection') and event.selection.points:
+            clicked_state_code = event.selection.points[0]['location']
+            clicked_state = df[df['state_code'] == clicked_state_code]['state'].iloc[0]
+            st.session_state.selected_state = clicked_state
+    else:
+        st.info("No states match the current filter criteria.")
+
+with col2:
+    st.markdown('<div class="section-header">📋 State Details</div>', unsafe_allow_html=True)
+    
+    if st.session_state.selected_state:
+        state_info = df[df['state'] == st.session_state.selected_state].iloc[0]
+        
+        st.subheader(f"📍 {state_info['state']}")
+        
+        # Region information
+        st.metric("Region", state_info['region'])
+        
+        # Detailed information
+        if state_info['vulnerable_protections']:
+            st.subheader("🛡️ Vulnerable Population Protections")
+            st.write(state_info['vulnerable_protections'][:300] + "..." if len(state_info['vulnerable_protections']) > 300 else state_info['vulnerable_protections'])
+        
+        if state_info['key_statutes']:
+            st.subheader("📜 Key Statutes")
+            st.write(state_info['key_statutes'][:200] + "..." if len(state_info['key_statutes']) > 200 else state_info['key_statutes'])
+        
+        if state_info['equity_initiatives']:
+            st.subheader("⚖️ Equity Initiatives")
+            st.write(state_info['equity_initiatives'])
+    else:
+        st.info("👆 Click a state on the map to view detailed disaster law information")
+
+# Territory data section (since territories don't appear on US map)
+territories_with_data = df[df['state'].isin(['District of Columbia', 'Puerto Rico', 'Guam'])]
+if not territories_with_data.empty:
+    st.markdown('<div class="section-header">🏛️ US Territories & Districts</div>', unsafe_allow_html=True)
+    st.markdown("*These jurisdictions have disaster law data but don't appear on the US state map above.*")
+    
+    territory_cols = st.columns(len(territories_with_data))
+    for i, (_, territory) in enumerate(territories_with_data.iterrows()):
+        with territory_cols[i]:
+            st.subheader(f"📍 {territory['state']}")
+            st.metric("Region", territory['region'])
+            
+            if territory['vulnerable_protections']:
+                with st.expander("View Details"):
+                    st.write("**Vulnerable Protections:**")
+                    st.write(territory['vulnerable_protections'][:200] + "..." if len(territory['vulnerable_protections']) > 200 else territory['vulnerable_protections'])
+
+
 
 st.markdown("---")
 st.markdown("*Data discovery dashboard showing available information about disaster laws across US states and territories. Use filters to explore specific data types and click states to view detailed information.*")
