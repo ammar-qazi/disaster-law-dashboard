@@ -468,15 +468,6 @@ with col2:
         st.session_state.filter_region = region_filter
         st.rerun()
 
-with col3:
-    # Count only actual US states (exclude territories)
-    us_states_only = df[~df['state'].isin(['District of Columbia', 'Puerto Rico', 'Guam', 'U.S. Virgin Islands', 'American Samoa', 'Northern Mariana Islands'])]
-    total_states = len(us_states_only)
-    total_jurisdictions = len(df)
-    st.metric("US States", total_states)
-    if total_jurisdictions > total_states:
-        st.caption(f"({total_jurisdictions} total jurisdictions)")
-
 # Apply filters
 filtered_df = df.copy()
 
@@ -496,6 +487,15 @@ if st.session_state.filter_data_type != "All":
 
 if st.session_state.filter_region != "All":
     filtered_df = filtered_df[filtered_df['region'] == st.session_state.filter_region]
+
+with col3:
+    # Count only actual US states (exclude territories)
+    us_states_only = filtered_df[~filtered_df['state'].isin(['District of Columbia', 'Puerto Rico', 'Guam', 'U.S. Virgin Islands', 'American Samoa', 'Northern Mariana Islands'])]
+    total_states = len(us_states_only)
+    total_jurisdictions = len(filtered_df)
+    st.metric("US States", total_states)
+    if total_jurisdictions > total_states:
+        st.caption(f"({total_jurisdictions} total jurisdictions)")
 
 with col4:
     st.metric("Total Jurisdictions", len(filtered_df) if not filtered_df.empty else 0)
